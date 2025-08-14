@@ -1,227 +1,73 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bản đồ Việt Nam – Tô màu các tỉnh đã đi</title>
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
+  <meta charset="UTF-8">
+  <title>Bản đồ các tỉnh đã đi</title>
+  <script src="https://code.highcharts.com/maps/highmaps.js"></script>
+  <script src="https://code.highcharts.com/maps/modules/exporting.js"></script>
+  <script src="https://code.highcharts.com/maps/modules/offline-exporting.js"></script>
+  <script src="https://code.highcharts.com/mapdata/countries/vn/vn-all.js"></script>
   <style>
-    :root{
-      --visited:#16a34a;   /* xanh lá */
-      --visited-stroke:#0f5132;
-      --unvisited:#cbd5e1; /* xám nhạt */
-      --hover:#0ea5e9;     /* xanh dương hover */
-    }
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#0b1020;color:#e5e7eb}
-    header{padding:18px 20px;border-bottom:1px solid #1f2937;background:linear-gradient(180deg,#0f172a,#0b1020)}
-    h1{margin:0;font-size:20px;letter-spacing:.2px}
-    .wrap{display:grid;grid-template-columns:340px 1fr;gap:16px;min-height:calc(100dvh - 70px)}
-    aside{border-right:1px solid #1f2937;padding:16px 16px 24px}
-    main{padding:16px}
-    #map{height:calc(100dvh - 120px);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);border:1px solid #1f2937}
-    .panel{background:#0f172a;border:1px solid #1f2937;border-radius:14px;padding:12px;margin-bottom:12px}
-    .panel h3{margin:0 0 10px;font-size:14px;color:#93c5fd}
-    .search{display:flex;gap:8px}
-    .search input{flex:1;border:1px solid #334155;background:#0b1020;color:#e5e7eb;border-radius:10px;padding:10px}
-    .list{max-height:44dvh;overflow:auto;margin-top:8px}
-    .item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:1px solid #1f2937;background:#0b1020;margin-bottom:8px}
-    .item input{accent-color:var(--visited)}
-    .tags{display:flex;gap:8px;flex-wrap:wrap}
-    .tag{background:#0b1020;border:1px dashed #334155;color:#93c5fd;border-radius:999px;padding:4px 10px;font-size:12px}
-    .legend{display:flex;gap:10px;align-items:center;margin-top:6px}
-    .swatch{width:14px;height:14px;border-radius:3px;border:1px solid #1f2937}
-    .note{font-size:12px;color:#9ca3af}
-    .btns{display:flex;gap:8px;margin-top:8px}
-    button{cursor:pointer;border:none;border-radius:10px;padding:10px 12px;background:#1f2937;color:#e5e7eb}
-    .primary{background:#10b981;color:#06281e;font-weight:600}
-    .clear{background:#334155}
-    .footer{font-size:12px;color:#94a3b8;margin-top:8px}
-    a{color:#93c5fd}
+    body { font-family: Arial, sans-serif; text-align: center; }
+    #container { height: 600px; max-width: 900px; margin: auto; }
+    .note { margin-top: 10px; color: #555; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>🗺️ Bản đồ Việt Nam – chọn tỉnh/thành bạn đã đi</h1>
-  </header>
-  <div class="wrap">
-    <aside>
-      <div class="panel">
-        <h3>🔎 Tìm nhanh</h3>
-        <div class="search">
-          <input id="search" placeholder="Gõ tên tỉnh/thành... (VD: Hà Nội)" />
-        </div>
-        <div class="legend">
-          <div class="swatch" style="background:var(--visited);"></div><span>Đã đi</span>
-          <div class="swatch" style="background:var(--unvisited);"></div><span>Chưa đi</span>
-        </div>
-        <div class="btns">
-          <button class="primary" id="selectAll">Chọn tất cả</button>
-          <button class="clear" id="clearAll">Bỏ chọn</button>
-        </div>
-      </div>
-      <div class="panel">
-        <h3>✅ Danh sách đã đi (<span id="count">0</span>/63)</h3>
-        <div id="picked" class="tags"></div>
-        <div class="footer note">Mẹo: bạn có thể <b>click trực tiếp trên bản đồ</b> để bật/tắt một tỉnh.</div>
-      </div>
-      <div class="panel">
-        <h3>🧭 Tất cả tỉnh/thành (63)</h3>
-        <div id="list" class="list" aria-live="polite"></div>
-      </div>
-    </aside>
-    <main>
-      <div id="map" role="region" aria-label="Bản đồ Việt Nam"></div>
-    </main>
-  </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script>
-    // Nguồn dữ liệu ranh giới tỉnh: OpenDevelopment Mekong (GeoJSON 63 tỉnh/thành)
-    // Dùng link tải trực tiếp để tương thích GitHub Pages
-    const GEOJSON_URL = 'https://data.opendevelopmentmekong.net/dataset/999c96d8-fae0-4b82-9a2b-e481f6f50e12/resource/2818c2c5-e9c3-440b-a9b8-3029d7298065/download/diaphantinhenglish.geojson';
+<h2>Bản đồ Việt Nam - Các tỉnh đã đi qua</h2>
+<div id="container"></div>
+<p class="note">Click vào tỉnh để đánh dấu hoặc bỏ đánh dấu. Tải ảnh bản đồ bằng nút "Download PNG".</p>
 
-    // Trạng thái lựa chọn
-    const selected = new Set(JSON.parse(localStorage.getItem('visitedProvinces') || '[]'));
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const provinces = Highcharts.maps['countries/vn/vn-all'].features.map(f => ({
+        'hc-key': f.properties['hc-key'],
+        value: 0 // 0 = chưa đi (xám), 1 = đã đi (màu)
+    }));
 
-    // Khởi tạo bản đồ
-    const map = L.map('map', { zoomControl: true, attributionControl: true });
-    // Nền tối nhẹ cho hợp giao diện
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    Highcharts.mapChart('container', {
+        chart: {
+            map: 'countries/vn/vn-all'
+        },
+        title: {
+            text: ''
+        },
+        mapNavigation: {
+            enabled: true,
+            buttonOptions: { verticalAlign: 'bottom' }
+        },
+        exporting: {
+            enabled: true
+        },
+        colorAxis: {
+            dataClasses: [{
+                from: 0, to: 0, color: '#cccccc', name: 'Chưa đi'
+            }, {
+                from: 1, to: 1, color: '#ff6666', name: 'Đã đi'
+            }]
+        },
+        series: [{
+            data: provinces,
+            name: 'Tỉnh/Thành',
+            states: {
+                hover: { color: '#ffcc00' }
+            },
+            dataLabels: {
+                enabled: false
+            },
+            point: {
+                events: {
+                    click: function () {
+                        this.value = this.value === 1 ? 0 : 1;
+                        this.update({ value: this.value });
+                    }
+                }
+            }
+        }]
+    });
+});
+</script>
 
-    // Lớp GeoJSON toàn quốc
-    let geoLayer;
-    // Lưu tham chiếu layer theo tên tỉnh để cập nhật nhanh
-    const byName = new Map();
-
-    // Tiện ích chuẩn hoá tên để so sánh (bỏ dấu, khoảng trắng thừa)
-    const normalize = s => s
-      .normalize('NFD').replace(/\p{Diacritic}/gu, '')
-      .replace(/\s+/g,' ').trim().toLowerCase();
-
-    function styleFor(name){
-      const picked = selected.has(name);
-      return {
-        color: picked ? getComputedStyle(document.documentElement).getPropertyValue('--visited-stroke') : '#111827',
-        weight: picked ? 1.2 : 0.8,
-        fillColor: picked ? getComputedStyle(document.documentElement).getPropertyValue('--visited') : getComputedStyle(document.documentElement).getPropertyValue('--unvisited'),
-        fillOpacity: picked ? 0.85 : 0.6
-      };
-    }
-
-    function updateCount(){
-      document.getElementById('count').textContent = selected.size;
-    }
-
-    function save(){
-      localStorage.setItem('visitedProvinces', JSON.stringify([...selected]));
-      updateCount();
-      renderPickedTags();
-    }
-
-    function renderPickedTags(){
-      const box = document.getElementById('picked');
-      box.innerHTML = '';
-      [...selected].sort((a,b)=>a.localeCompare(b,'vi')).forEach(name => {
-        const chip = document.createElement('span');
-        chip.className = 'tag';
-        chip.textContent = name;
-        chip.title = 'Nhấp để bỏ chọn';
-        chip.onclick = () => toggleByName(name);
-        box.appendChild(chip);
-      });
-    }
-
-    function toggleByName(name){
-      if(selected.has(name)) selected.delete(name); else selected.add(name);
-      const layer = byName.get(name);
-      if(layer){ layer.setStyle(styleFor(name)); }
-      // Đồng bộ checkbox nếu có
-      const cb = document.querySelector(`.item input[data-name="${CSS.escape(name)}"]`);
-      if(cb) cb.checked = selected.has(name);
-      save();
-    }
-
-    function makeList(allNames){
-      const list = document.getElementById('list');
-      list.innerHTML = '';
-
-      // Tạo item cho mỗi tỉnh
-      allNames.sort((a,b)=>a.localeCompare(b,'vi')).forEach(name =>{
-        const row = document.createElement('label');
-        row.className = 'item';
-        row.innerHTML = `
-          <input type="checkbox" data-name="${name}"> 
-          <span>${name}</span>
-        `;
-        const cb = row.querySelector('input');
-        cb.checked = selected.has(name);
-        cb.addEventListener('change', () => toggleByName(name));
-        list.appendChild(row);
-      });
-
-      // Tìm kiếm
-      const search = document.getElementById('search');
-      search.oninput = () => {
-        const q = normalize(search.value);
-        for(const row of list.children){
-          const nm = row.querySelector('span').textContent;
-          row.style.display = normalize(nm).includes(q) ? '' : 'none';
-        }
-      };
-
-      document.getElementById('selectAll').onclick = () => {
-        allNames.forEach(n=>selected.add(n));
-        byName.forEach((layer,name)=> layer.setStyle(styleFor(name)));
-        document.querySelectorAll('.item input').forEach(cb=>cb.checked=true);
-        save();
-      };
-      document.getElementById('clearAll').onclick = () => {
-        selected.clear();
-        byName.forEach((layer,name)=> layer.setStyle(styleFor(name)));
-        document.querySelectorAll('.item input').forEach(cb=>cb.checked=false);
-        save();
-      };
-
-      updateCount();
-      renderPickedTags();
-    }
-
-    fetch(GEOJSON_URL)
-      .then(r => r.json())
-      .then(data => {
-        // Dữ liệu này có thuộc tính tên tỉnh là "Name" (tiếng Anh, không dấu)
-        const names = new Set();
-
-        geoLayer = L.geoJSON(data, {
-          style: f => styleFor(f.properties.Name),
-          onEachFeature: (feature, layer) => {
-            const name = feature.properties.Name;
-            names.add(name);
-            byName.set(name, layer);
-
-            layer.bindTooltip(name, {sticky:true, direction:'auto'});
-
-            layer.on('click', () => toggleByName(name));
-            layer.on('mouseover', () => layer.setStyle({ color: getComputedStyle(document.documentElement).getPropertyValue('--hover'), weight: 2 }));
-            layer.on('mouseout', () => layer.setStyle(styleFor(name)));
-          }
-        }).addTo(map);
-
-        map.fitBounds(geoLayer.getBounds(), { padding:[20,20] });
-        makeList([...names]);
-      })
-      .catch(err => {
-        console.error(err);
-        alert('Không tải được dữ liệu bản đồ. Vui lòng kiểm tra kết nối mạng hoặc thử tải lại trang.');
-      });
-  </script>
 </body>
 </html>
