@@ -1,73 +1,98 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <title>Bản đồ các tỉnh đã đi</title>
-  <script src="https://code.highcharts.com/maps/highmaps.js"></script>
-  <script src="https://code.highcharts.com/maps/modules/exporting.js"></script>
-  <script src="https://code.highcharts.com/maps/modules/offline-exporting.js"></script>
-  <script src="https://code.highcharts.com/mapdata/countries/vn/vn-all.js"></script>
+  <meta charset="utf-8">
+  <title>Bản đồ Việt Nam – Đã đi qua</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; }
-    #container { height: 600px; max-width: 900px; margin: auto; }
-    .note { margin-top: 10px; color: #555; }
+    body { margin:0; display:flex; height:100vh; font-family:sans-serif; }
+    aside { width:300px; padding:10px; background:#f7f7f7; overflow:auto; }
+    main { flex:1; position:relative; }
+    #map { width:100%; height:100%; }
+    .item { margin-bottom:6px; }
+    .download-btn { position:absolute; top:10px; right:10px; z-index:1000;
+      background:green; color:white; border:none; padding:8px 12px; cursor:pointer; border-radius:4px;
+    }
   </style>
 </head>
 <body>
+  <aside>
+    <h3>✅ Lựa chọn tỉnh</h3>
+    <div id="list"></div>
+  </aside>
+  <main>
+    <button class="download-btn" id="download">Tải ảnh PNG</button>
+    <div id="map"></div>
+  </main>
 
-<h2>Bản đồ Việt Nam - Các tỉnh đã đi qua</h2>
-<div id="container"></div>
-<p class="note">Click vào tỉnh để đánh dấu hoặc bỏ đánh dấu. Tải ảnh bản đồ bằng nút "Download PNG".</p>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const provinces = Highcharts.maps['countries/vn/vn-all'].features.map(f => ({
-        'hc-key': f.properties['hc-key'],
-        value: 0 // 0 = chưa đi (xám), 1 = đã đi (màu)
-    }));
+  <script>
+    // Tải GeoJSON gồm 63 tỉnh & quần đảo (mà GitHub cung cấp)
+    const GEOJSON = 'https://raw.githubusercontent.com/adminvsrm/GISData/main/Vietnam Administrative Divisions (Pre-2025)/Provinces_included_Paracel_SpratlyIslands.geojson';
 
-    Highcharts.mapChart('container', {
-        chart: {
-            map: 'countries/vn/vn-all'
-        },
-        title: {
-            text: ''
-        },
-        mapNavigation: {
-            enabled: true,
-            buttonOptions: { verticalAlign: 'bottom' }
-        },
-        exporting: {
-            enabled: true
-        },
-        colorAxis: {
-            dataClasses: [{
-                from: 0, to: 0, color: '#cccccc', name: 'Chưa đi'
-            }, {
-                from: 1, to: 1, color: '#ff6666', name: 'Đã đi'
-            }]
-        },
-        series: [{
-            data: provinces,
-            name: 'Tỉnh/Thành',
-            states: {
-                hover: { color: '#ffcc00' }
-            },
-            dataLabels: {
-                enabled: false
-            },
-            point: {
-                events: {
-                    click: function () {
-                        this.value = this.value === 1 ? 0 : 1;
-                        this.update({ value: this.value });
-                    }
-                }
-            }
-        }]
+    const map = L.map('map').setView([16,108], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OSM contributors'
+    }).addTo(map);
+
+    let selected = new Set(JSON.parse(localStorage.getItem('visited')||'[]'));
+    const byName = new Map();
+
+    function styleFn(feature) {
+      const name = feature.properties.NAME_1;
+      const isOn = selected.has(name);
+      return {
+        fillColor: isOn ? '#16a34a' : '#cbd5e1',
+        color: '#555',
+        weight: 1,
+        fillOpacity: isOn ? 0.8 : 0.5
+      };
+    }
+
+    function toggle(name) {
+      if (selected.has(name)) selected.delete(name);
+      else selected.add(name);
+      byName.get(name).setStyle(styleFn(byName.get(name).feature));
+      updateList();
+      localStorage.setItem('visited', JSON.stringify([...selected]));
+    }
+
+    function updateList() {
+      const container = document.getElementById('list');
+      container.innerHTML = '';
+      const all = Array.from(byName.keys()).sort((a,b)=>a.localeCompare(b,'vi'));
+      for (const name of all) {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `<label><input type="checkbox" ${selected.has(name)?'checked':''}/> ${name}</label>`;
+        const cb = div.querySelector('input');
+        cb.onchange = () => toggle(name);
+        container.appendChild(div);
+      }
+    }
+
+    fetch(GEOJSON).then(r=>r.json()).then(data=>{
+      L.geoJSON(data, {
+        style: styleFn,
+        onEachFeature: (feat,layer)=>{
+          const name = feat.properties.NAME_1;
+          byName.set(name, layer);
+          layer.on('click', ()=> toggle(name));
+        }
+      }).addTo(map);
+      updateList();
     });
-});
-</script>
 
+    document.getElementById('download').onclick = async () => {
+      const canvas = await html2canvas(map.getContainer());
+      const link = document.createElement('a');
+      link.download = 'vietnam_map_visited.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    };
+  </script>
 </body>
 </html>
