@@ -1,315 +1,227 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bản đồ các tỉnh/thành đã từng đi qua</title>
-  <!-- TailwindCSS CDN for quick styling -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <meta name="description" content="Tích chọn các tỉnh/thành bạn đã đến, xem tiến độ, lưu vào trình duyệt, và xuất ảnh chia sẻ." />
+  <title>Bản đồ Việt Nam – Tô màu các tỉnh đã đi</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
   <style>
-    /* Grid-map squares */
-    .cell {
-      aspect-ratio: 1/1;
-      border-radius: 0.5rem;
-      display: flex; align-items: center; justify-content: center;
-      font-size: .8rem; line-height: 1.05; text-align: center;
-      border: 1px solid rgba(0,0,0,.1);
-      user-select: none;
-      transition: transform .1s ease, box-shadow .2s ease, background-color .2s ease;
-      cursor: pointer;
+    :root{
+      --visited:#16a34a;   /* xanh lá */
+      --visited-stroke:#0f5132;
+      --unvisited:#cbd5e1; /* xám nhạt */
+      --hover:#0ea5e9;     /* xanh dương hover */
     }
-    .cell:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,.08); }
-    .cell.selected { background: #22c55e20; border-color: #22c55e; }
-    .cell.selected .dot { background: #16a34a; }
-    .dot { width: .55rem; height: .55rem; border-radius: 9999px; opacity: .85; }
-    /* Print optimizations */
-    @media print {
-      .no-print { display: none !important; }
-      body { background: white; }
-    }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#0b1020;color:#e5e7eb}
+    header{padding:18px 20px;border-bottom:1px solid #1f2937;background:linear-gradient(180deg,#0f172a,#0b1020)}
+    h1{margin:0;font-size:20px;letter-spacing:.2px}
+    .wrap{display:grid;grid-template-columns:340px 1fr;gap:16px;min-height:calc(100dvh - 70px)}
+    aside{border-right:1px solid #1f2937;padding:16px 16px 24px}
+    main{padding:16px}
+    #map{height:calc(100dvh - 120px);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);border:1px solid #1f2937}
+    .panel{background:#0f172a;border:1px solid #1f2937;border-radius:14px;padding:12px;margin-bottom:12px}
+    .panel h3{margin:0 0 10px;font-size:14px;color:#93c5fd}
+    .search{display:flex;gap:8px}
+    .search input{flex:1;border:1px solid #334155;background:#0b1020;color:#e5e7eb;border-radius:10px;padding:10px}
+    .list{max-height:44dvh;overflow:auto;margin-top:8px}
+    .item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:1px solid #1f2937;background:#0b1020;margin-bottom:8px}
+    .item input{accent-color:var(--visited)}
+    .tags{display:flex;gap:8px;flex-wrap:wrap}
+    .tag{background:#0b1020;border:1px dashed #334155;color:#93c5fd;border-radius:999px;padding:4px 10px;font-size:12px}
+    .legend{display:flex;gap:10px;align-items:center;margin-top:6px}
+    .swatch{width:14px;height:14px;border-radius:3px;border:1px solid #1f2937}
+    .note{font-size:12px;color:#9ca3af}
+    .btns{display:flex;gap:8px;margin-top:8px}
+    button{cursor:pointer;border:none;border-radius:10px;padding:10px 12px;background:#1f2937;color:#e5e7eb}
+    .primary{background:#10b981;color:#06281e;font-weight:600}
+    .clear{background:#334155}
+    .footer{font-size:12px;color:#94a3b8;margin-top:8px}
+    a{color:#93c5fd}
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800">
-  <div class="max-w-7xl mx-auto p-4 md:p-6">
-    <header class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-      <div>
-        <h1 class="text-2xl md:text-3xl font-semibold">Bản đồ đã từng đi qua – Việt Nam</h1>
-        <p class="text-slate-600">Chọn các <span class="font-medium">tỉnh/thành</span> bạn đã đến. Tự động tính tổng, lưu vào trình duyệt và xuất ảnh chia sẻ.</p>
+<body>
+  <header>
+    <h1>🗺️ Bản đồ Việt Nam – chọn tỉnh/thành bạn đã đi</h1>
+  </header>
+  <div class="wrap">
+    <aside>
+      <div class="panel">
+        <h3>🔎 Tìm nhanh</h3>
+        <div class="search">
+          <input id="search" placeholder="Gõ tên tỉnh/thành... (VD: Hà Nội)" />
+        </div>
+        <div class="legend">
+          <div class="swatch" style="background:var(--visited);"></div><span>Đã đi</span>
+          <div class="swatch" style="background:var(--unvisited);"></div><span>Chưa đi</span>
+        </div>
+        <div class="btns">
+          <button class="primary" id="selectAll">Chọn tất cả</button>
+          <button class="clear" id="clearAll">Bỏ chọn</button>
+        </div>
       </div>
-      <div class="flex gap-2 no-print">
-        <button id="btnExportPNG" class="px-3 py-2 rounded-2xl bg-slate-900 text-white hover:bg-slate-800">Xuất ảnh PNG</button>
-        <button id="btnPrint" class="px-3 py-2 rounded-2xl bg-white border hover:bg-slate-100">In / Lưu PDF</button>
+      <div class="panel">
+        <h3>✅ Danh sách đã đi (<span id="count">0</span>/63)</h3>
+        <div id="picked" class="tags"></div>
+        <div class="footer note">Mẹo: bạn có thể <b>click trực tiếp trên bản đồ</b> để bật/tắt một tỉnh.</div>
       </div>
-    </header>
-
-    <section class="mt-5 grid gap-6 md:grid-cols-[340px_1fr]">
-      <!-- Sidebar -->
-      <aside class="bg-white rounded-2xl p-4 shadow-sm border">
-        <div class="flex items-center gap-2 mb-3">
-          <input id="search" class="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring focus:ring-slate-200" placeholder="Tìm tỉnh/thành..." />
-          <button id="btnClear" class="px-2 py-2 rounded-xl border text-slate-600 hover:bg-slate-50" title="Xóa tìm kiếm">✕</button>
-        </div>
-        <div class="flex flex-wrap gap-2 mb-3 text-sm">
-          <button id="btnSelectAll" class="px-3 py-1.5 rounded-xl border hover:bg-slate-50">Chọn tất cả</button>
-          <button id="btnUnselectAll" class="px-3 py-1.5 rounded-xl border hover:bg-slate-50">Bỏ chọn hết</button>
-          <button id="btnInvert" class="px-3 py-1.5 rounded-xl border hover:bg-slate-50">Đảo chọn</button>
-        </div>
-        <div class="flex items-center justify-between mb-2 text-sm">
-          <div>
-            <span class="font-medium">Đã đi:</span>
-            <span id="count"></span>/<span id="total"></span>
-            <span class="text-slate-500">(<span id="percent">0%</span>)</span>
-          </div>
-          <label class="flex items-center gap-2">
-            <input id="toggleCodes" type="checkbox" class="size-4" />
-            <span class="text-slate-600">Hiện mã tỉnh</span>
-          </label>
-        </div>
-        <details class="mb-2" open>
-          <summary class="cursor-pointer text-slate-700 mb-2">Xuất / Nhập dữ liệu</summary>
-          <div class="space-y-2 text-sm">
-            <div class="flex gap-2">
-              <button id="btnCopyJSON" class="px-2 py-1 rounded-lg border hover:bg-slate-50">Copy JSON</button>
-              <button id="btnCopyURL" class="px-2 py-1 rounded-lg border hover:bg-slate-50">Copy liên kết chia sẻ</button>
-            </div>
-            <textarea id="importBox" class="w-full h-20 rounded-lg border p-2" placeholder='Dán JSON (ví dụ: {"visited":["Hà Nội","Đà Nẵng"]})'></textarea>
-            <div class="flex gap-2">
-              <button id="btnImport" class="px-2 py-1 rounded-lg border hover:bg-slate-50">Nhập</button>
-              <button id="btnSaveLocal" class="px-2 py-1 rounded-lg border hover:bg-slate-50">Lưu vào trình duyệt</button>
-              <button id="btnLoadLocal" class="px-2 py-1 rounded-lg border hover:bg-slate-50">Tải dữ liệu đã lưu</button>
-            </div>
-          </div>
-        </details>
-        <div class="h-[320px] overflow-auto border rounded-xl p-2" id="list"></div>
-      </aside>
-
-      <!-- Map Grid -->
-      <main id="captureArea" class="bg-white rounded-2xl p-4 shadow-sm border">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold">Lưới tỉnh/thành (63 đơn vị hành chính hiện hành)</h2>
-          <div class="text-sm text-slate-500">*Sắp xếp theo ABC. Bấm vào từng ô hoặc tìm ở panel bên trái.</div>
-        </div>
-        <div id="grid" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2"></div>
-        <p class="text-sm text-slate-500 mt-3">Gợi ý: Bật “Hiện mã tỉnh” để gọn hơn khi chụp ảnh. Bạn cũng có thể in ra PDF.</p>
-      </main>
-    </section>
-
-    <footer class="mt-8 text-center text-xs text-slate-500">
-      Made with ♥ | Lưu cục bộ, không gửi dữ liệu ra ngoài.
-    </footer>
+      <div class="panel">
+        <h3>🧭 Tất cả tỉnh/thành (63)</h3>
+        <div id="list" class="list" aria-live="polite"></div>
+      </div>
+    </aside>
+    <main>
+      <div id="map" role="region" aria-label="Bản đồ Việt Nam"></div>
+    </main>
   </div>
 
-  <!-- html2canvas for PNG export -->
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    // --- Data: 63 tỉnh/thành ---
-    const PROVINCES = [
-      "An Giang","Bà Rịa - Vũng Tàu","Bạc Liêu","Bắc Giang","Bắc Kạn","Bắc Ninh","Bến Tre","Bình Dương","Bình Định","Bình Phước","Bình Thuận","Cà Mau","Cao Bằng","Cần Thơ","Đà Nẵng","Đắk Lắk","Đắk Nông","Điện Biên","Đồng Nai","Đồng Tháp","Gia Lai","Hà Giang","Hà Nam","Hà Nội","Hà Tĩnh","Hải Dương","Hải Phòng","Hậu Giang","Hòa Bình","Hưng Yên","Kiên Giang","Kon Tum","Khánh Hòa","Lai Châu","Lâm Đồng","Lạng Sơn","Lào Cai","Long An","Nam Định","Nghệ An","Ninh Bình","Ninh Thuận","Phú Thọ","Phú Yên","Quảng Bình","Quảng Nam","Quảng Ngãi","Quảng Ninh","Quảng Trị","Sóc Trăng","Sơn La","Tây Ninh","Thái Bình","Thái Nguyên","Thanh Hóa","Thừa Thiên Huế","Tiền Giang","TP. Hồ Chí Minh","Trà Vinh","Tuyên Quang","Vĩnh Long","Vĩnh Phúc","Yên Bái"
-    ];
+    // Nguồn dữ liệu ranh giới tỉnh: OpenDevelopment Mekong (GeoJSON 63 tỉnh/thành)
+    // Dùng link tải trực tiếp để tương thích GitHub Pages
+    const GEOJSON_URL = 'https://data.opendevelopmentmekong.net/dataset/999c96d8-fae0-4b82-9a2b-e481f6f50e12/resource/2818c2c5-e9c3-440b-a9b8-3029d7298065/download/diaphantinhenglish.geojson';
 
-    // Simple province codes (initials) for compact labels
-    const CODES = {
-      "An Giang":"AG","Bà Rịa - Vũng Tàu":"BRVT","Bạc Liêu":"BL","Bắc Giang":"BG","Bắc Kạn":"BK","Bắc Ninh":"BN","Bến Tre":"BTre","Bình Dương":"BD","Bình Định":"BĐ","Bình Phước":"BP","Bình Thuận":"BTh","Cà Mau":"CM","Cao Bằng":"CB","Cần Thơ":"CT","Đà Nẵng":"ĐN","Đắk Lắk":"ĐLk","Đắk Nông":"ĐNông","Điện Biên":"ĐB","Đồng Nai":"ĐNai","Đồng Tháp":"ĐT","Gia Lai":"GL","Hà Giang":"HG","Hà Nam":"HNam","Hà Nội":"HN","Hà Tĩnh":"HT","Hải Dương":"HD","Hải Phòng":"HP","Hậu Giang":"HGia","Hòa Bình":"HB","Hưng Yên":"HY","Kiên Giang":"KG","Kon Tum":"KT","Khánh Hòa":"KH","Lai Châu":"LC","Lâm Đồng":"LĐ","Lạng Sơn":"LS","Lào Cai":"LàoC","Long An":"LA","Nam Định":"NĐ","Nghệ An":"NA","Ninh Bình":"NB","Ninh Thuận":"NT","Phú Thọ":"PT","Phú Yên":"PY","Quảng Bình":"QB","Quảng Nam":"QN","Quảng Ngãi":"QNg","Quảng Ninh":"QNi","Quảng Trị":"QT","Sóc Trăng":"ST","Sơn La":"SL","Tây Ninh":"TN","Thái Bình":"TB","Thái Nguyên":"TNg","Thanh Hóa":"TH","Thừa Thiên Huế":"TTH","Tiền Giang":"TG","TP. Hồ Chí Minh":"TPHCM","Trà Vinh":"TV","Tuyên Quang":"TQ","Vĩnh Long":"VL","Vĩnh Phúc":"VP","Yên Bái":"YB"
-    };
+    // Trạng thái lựa chọn
+    const selected = new Set(JSON.parse(localStorage.getItem('visitedProvinces') || '[]'));
 
-    // --- State ---
-    const state = {
-      visited: new Set(),
-      showCodes: false,
-    };
+    // Khởi tạo bản đồ
+    const map = L.map('map', { zoomControl: true, attributionControl: true });
+    // Nền tối nhẹ cho hợp giao diện
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-    // --- Elements ---
-    const gridEl = document.getElementById('grid');
-    const listEl = document.getElementById('list');
-    const searchEl = document.getElementById('search');
-    const countEl = document.getElementById('count');
-    const totalEl = document.getElementById('total');
-    const percentEl = document.getElementById('percent');
+    // Lớp GeoJSON toàn quốc
+    let geoLayer;
+    // Lưu tham chiếu layer theo tên tỉnh để cập nhật nhanh
+    const byName = new Map();
 
-    const toggleCodesEl = document.getElementById('toggleCodes');
-    const btnSelectAll = document.getElementById('btnSelectAll');
-    const btnUnselectAll = document.getElementById('btnUnselectAll');
-    const btnInvert = document.getElementById('btnInvert');
-    const btnCopyJSON = document.getElementById('btnCopyJSON');
-    const btnCopyURL = document.getElementById('btnCopyURL');
-    const btnImport = document.getElementById('btnImport');
-    const btnSaveLocal = document.getElementById('btnSaveLocal');
-    const btnLoadLocal = document.getElementById('btnLoadLocal');
-    const importBox = document.getElementById('importBox');
-    const btnPrint = document.getElementById('btnPrint');
-    const btnExportPNG = document.getElementById('btnExportPNG');
+    // Tiện ích chuẩn hoá tên để so sánh (bỏ dấu, khoảng trắng thừa)
+    const normalize = s => s
+      .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+      .replace(/\s+/g,' ').trim().toLowerCase();
 
-    totalEl.textContent = PROVINCES.length;
-
-    // --- Helpers ---
-    function renderStats(){
-      const c = state.visited.size;
-      countEl.textContent = c;
-      percentEl.textContent = ((c*100/PROVINCES.length).toFixed(1)) + '%';
+    function styleFor(name){
+      const picked = selected.has(name);
+      return {
+        color: picked ? getComputedStyle(document.documentElement).getPropertyValue('--visited-stroke') : '#111827',
+        weight: picked ? 1.2 : 0.8,
+        fillColor: picked ? getComputedStyle(document.documentElement).getPropertyValue('--visited') : getComputedStyle(document.documentElement).getPropertyValue('--unvisited'),
+        fillOpacity: picked ? 0.85 : 0.6
+      };
     }
 
-    function makeCell(name){
-      const code = CODES[name] || name;
-      const cell = document.createElement('button');
-      cell.className = 'cell bg-slate-50 hover:bg-slate-100';
-      cell.setAttribute('data-name', name);
-      cell.innerHTML = `
-        <div class="flex flex-col items-center gap-1">
-          <div class="dot"></div>
-          <div class="font-medium province-label">${name}</div>
-          <div class="text-xs text-slate-500 code-label hidden">${code}</div>
-        </div>`;
-      cell.addEventListener('click', () => toggleVisit(name));
-      return cell;
+    function updateCount(){
+      document.getElementById('count').textContent = selected.size;
     }
 
-    function makeListItem(name){
-      const id = 'chk-' + name.replace(/\s|\.|\-|\//g,'');
-      const wrap = document.createElement('label');
-      wrap.className = 'flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-50 cursor-pointer';
-      wrap.innerHTML = `
-        <input id="${id}" type="checkbox" class="size-4" />
-        <span>${name}</span>`;
-      const chk = wrap.querySelector('input');
-      chk.addEventListener('change', (e)=>{
-        if(e.target.checked) state.visited.add(name); else state.visited.delete(name);
-        syncGridFromState(); renderStats();
-        updateURLHash();
-      });
-      return {wrap, chk};
+    function save(){
+      localStorage.setItem('visitedProvinces', JSON.stringify([...selected]));
+      updateCount();
+      renderPickedTags();
     }
 
-    function toggleVisit(name){
-      if(state.visited.has(name)) state.visited.delete(name); else state.visited.add(name);
-      syncListFromState(); syncGridFromState(); renderStats(); updateURLHash();
-    }
-
-    function syncGridFromState(){
-      gridEl.querySelectorAll('.cell').forEach(el=>{
-        const name = el.getAttribute('data-name');
-        const on = state.visited.has(name);
-        el.classList.toggle('selected', on);
+    function renderPickedTags(){
+      const box = document.getElementById('picked');
+      box.innerHTML = '';
+      [...selected].sort((a,b)=>a.localeCompare(b,'vi')).forEach(name => {
+        const chip = document.createElement('span');
+        chip.className = 'tag';
+        chip.textContent = name;
+        chip.title = 'Nhấp để bỏ chọn';
+        chip.onclick = () => toggleByName(name);
+        box.appendChild(chip);
       });
     }
 
-    function syncListFromState(){
-      listEl.querySelectorAll('input[type="checkbox"]').forEach(chk=>{
-        const label = chk.nextElementSibling?.textContent || '';
-        chk.checked = state.visited.has(label);
+    function toggleByName(name){
+      if(selected.has(name)) selected.delete(name); else selected.add(name);
+      const layer = byName.get(name);
+      if(layer){ layer.setStyle(styleFor(name)); }
+      // Đồng bộ checkbox nếu có
+      const cb = document.querySelector(`.item input[data-name="${CSS.escape(name)}"]`);
+      if(cb) cb.checked = selected.has(name);
+      save();
+    }
+
+    function makeList(allNames){
+      const list = document.getElementById('list');
+      list.innerHTML = '';
+
+      // Tạo item cho mỗi tỉnh
+      allNames.sort((a,b)=>a.localeCompare(b,'vi')).forEach(name =>{
+        const row = document.createElement('label');
+        row.className = 'item';
+        row.innerHTML = `
+          <input type="checkbox" data-name="${name}"> 
+          <span>${name}</span>
+        `;
+        const cb = row.querySelector('input');
+        cb.checked = selected.has(name);
+        cb.addEventListener('change', () => toggleByName(name));
+        list.appendChild(row);
       });
-    }
 
-    function filterList(){
-      const q = (searchEl.value || '').toLowerCase().trim();
-      listEl.querySelectorAll('label').forEach(item=>{
-        const text = item.textContent.toLowerCase();
-        item.style.display = text.includes(q) ? '' : 'none';
-      });
-    }
-
-    function updateURLHash(){
-      try {
-        const data = { visited: Array.from(state.visited) };
-        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-        location.hash = encoded;
-      } catch(e){}
-    }
-
-    function loadFromHash(){
-      if(!location.hash) return;
-      try{
-        const json = decodeURIComponent(escape(atob(location.hash.slice(1))));
-        const data = JSON.parse(json);
-        if(Array.isArray(data.visited)){
-          state.visited = new Set(data.visited.filter(x=>PROVINCES.includes(x)));
+      // Tìm kiếm
+      const search = document.getElementById('search');
+      search.oninput = () => {
+        const q = normalize(search.value);
+        for(const row of list.children){
+          const nm = row.querySelector('span').textContent;
+          row.style.display = normalize(nm).includes(q) ? '' : 'none';
         }
-      }catch(e){}
+      };
+
+      document.getElementById('selectAll').onclick = () => {
+        allNames.forEach(n=>selected.add(n));
+        byName.forEach((layer,name)=> layer.setStyle(styleFor(name)));
+        document.querySelectorAll('.item input').forEach(cb=>cb.checked=true);
+        save();
+      };
+      document.getElementById('clearAll').onclick = () => {
+        selected.clear();
+        byName.forEach((layer,name)=> layer.setStyle(styleFor(name)));
+        document.querySelectorAll('.item input').forEach(cb=>cb.checked=false);
+        save();
+      };
+
+      updateCount();
+      renderPickedTags();
     }
 
-    function saveLocal(){
-      const data = { visited: Array.from(state.visited) };
-      localStorage.setItem('vn-visited', JSON.stringify(data));
-    }
-    function loadLocal(){
-      try{
-        const raw = localStorage.getItem('vn-visited');
-        if(!raw) return;
-        const data = JSON.parse(raw);
-        if(Array.isArray(data.visited)) state.visited = new Set(data.visited.filter(x=>PROVINCES.includes(x)));
-      }catch(e){}
-    }
+    fetch(GEOJSON_URL)
+      .then(r => r.json())
+      .then(data => {
+        // Dữ liệu này có thuộc tính tên tỉnh là "Name" (tiếng Anh, không dấu)
+        const names = new Set();
 
-    // --- Build UI ---
-    // Grid
-    PROVINCES.sort((a,b)=>a.localeCompare(b,'vi')).forEach(name=>{
-      gridEl.appendChild(makeCell(name));
-    });
+        geoLayer = L.geoJSON(data, {
+          style: f => styleFor(f.properties.Name),
+          onEachFeature: (feature, layer) => {
+            const name = feature.properties.Name;
+            names.add(name);
+            byName.set(name, layer);
 
-    // List
-    const listItems = {};
-    PROVINCES.forEach(name=>{
-      const {wrap, chk} = makeListItem(name);
-      listItems[name] = {wrap, chk};
-      listEl.appendChild(wrap);
-    });
+            layer.bindTooltip(name, {sticky:true, direction:'auto'});
 
-    // Start from hash or local
-    loadFromHash();
-    if(state.visited.size === 0) loadLocal();
-    syncGridFromState(); syncListFromState(); renderStats();
+            layer.on('click', () => toggleByName(name));
+            layer.on('mouseover', () => layer.setStyle({ color: getComputedStyle(document.documentElement).getPropertyValue('--hover'), weight: 2 }));
+            layer.on('mouseout', () => layer.setStyle(styleFor(name)));
+          }
+        }).addTo(map);
 
-    // Events
-    searchEl.addEventListener('input', filterList);
-    document.getElementById('btnClear').addEventListener('click', ()=>{ searchEl.value=''; filterList(); searchEl.focus(); });
-
-    toggleCodesEl.addEventListener('change', (e)=>{
-      state.showCodes = e.target.checked;
-      document.querySelectorAll('.province-label').forEach(el=> el.classList.toggle('hidden', state.showCodes));
-      document.querySelectorAll('.code-label').forEach(el=> el.classList.toggle('hidden', !state.showCodes));
-    });
-
-    btnSelectAll.addEventListener('click', ()=>{ PROVINCES.forEach(p=>state.visited.add(p)); syncGridFromState(); syncListFromState(); renderStats(); updateURLHash(); });
-    btnUnselectAll.addEventListener('click', ()=>{ state.visited.clear(); syncGridFromState(); syncListFromState(); renderStats(); updateURLHash(); });
-    btnInvert.addEventListener('click', ()=>{ const next=new Set(); PROVINCES.forEach(p=>{ if(!state.visited.has(p)) next.add(p); }); state.visited=next; syncGridFromState(); syncListFromState(); renderStats(); updateURLHash(); });
-
-    btnCopyJSON.addEventListener('click', async ()=>{
-      const text = JSON.stringify({visited: Array.from(state.visited)}, null, 2);
-      await navigator.clipboard.writeText(text);
-      btnCopyJSON.textContent = 'Đã copy!'; setTimeout(()=>btnCopyJSON.textContent='Copy JSON', 1200);
-    });
-
-    btnCopyURL.addEventListener('click', async ()=>{
-      updateURLHash();
-      await navigator.clipboard.writeText(location.href);
-      btnCopyURL.textContent = 'Đã copy!'; setTimeout(()=>btnCopyURL.textContent='Copy liên kết chia sẻ', 1200);
-    });
-
-    btnImport.addEventListener('click', ()=>{
-      try{
-        const data = JSON.parse(importBox.value);
-        if(Array.isArray(data.visited)){
-          state.visited = new Set(data.visited.filter(x=>PROVINCES.includes(x)));
-          syncGridFromState(); syncListFromState(); renderStats(); updateURLHash();
-          alert('Nhập dữ liệu thành công!');
-        } else {
-          alert('JSON không hợp lệ: thiếu mảng "visited"');
-        }
-      }catch(e){ alert('JSON không hợp lệ.'); }
-    });
-
-    btnSaveLocal.addEventListener('click', ()=>{ saveLocal(); alert('Đã lưu dữ liệu vào trình duyệt.'); });
-    btnLoadLocal.addEventListener('click', ()=>{ loadLocal(); syncGridFromState(); syncListFromState(); renderStats(); updateURLHash(); });
-
-    btnPrint.addEventListener('click', ()=> window.print());
-
-    btnExportPNG.addEventListener('click', async ()=>{
-      const node = document.getElementById('captureArea');
-      const canvas = await html2canvas(node, {backgroundColor: '#ffffff', scale: 2});
-      const url = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = url; a.download = 'ban-do-tinh-da-di.png'; a.click();
-    });
+        map.fitBounds(geoLayer.getBounds(), { padding:[20,20] });
+        makeList([...names]);
+      })
+      .catch(err => {
+        console.error(err);
+        alert('Không tải được dữ liệu bản đồ. Vui lòng kiểm tra kết nối mạng hoặc thử tải lại trang.');
+      });
   </script>
 </body>
 </html>
